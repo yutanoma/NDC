@@ -15,6 +15,14 @@ def read_sdf_file_as_3d_array(name):
     fp.close()
     return data
 
+def read_npz_file_as_3d_array(name):
+    npz = np.load(name)
+    pos = npz["position"]
+    dist = npz["distance"]
+    grad = npz["gradient"]
+    data = dist.reshape(100, 100, 100)
+    return data
+
 #a simplified reader for binvox files
 #mostly copied from binvox_rw.py
 #https://github.com/dimatura/binvox-rw-py

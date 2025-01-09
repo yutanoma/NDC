@@ -29,7 +29,7 @@ parser.add_argument("--grid_size", action="store", dest="grid_size", default=64,
 parser.add_argument("--block_num_per_dim", action="store", dest="block_num_per_dim", default=5, type=int, help="Number of blocks per dimension [1,5,10]")
 parser.add_argument("--block_padding", action="store", dest="block_padding", default=5, type=int, help="Padding for each block [5]")
 
-parser.add_argument("--input_type", action="store", dest="input_type", default="sdf", help="Input type [sdf,voxel,udf,pointcloud,noisypc]")
+parser.add_argument("--input_type", action="store", dest="input_type", default="npz", help="Input type [npz,sdf,voxel,udf,pointcloud,noisypc]")
 parser.add_argument("--method", action="store", dest="method", default="ndc", help="Method type [ndc,undc,ndcx]")
 parser.add_argument("--postprocessing", action="store_true", dest="postprocessing", default=False, help="Enable the post-processing step to close small holes [False]")
 parser.add_argument("--gpu", action="store", dest="gpu", default="0", help="to use which GPU [0]")
@@ -85,12 +85,12 @@ else:
 
 #Create network
 if FLAGS.method == "ndc":
-    if FLAGS.input_type == "sdf":
+    if FLAGS.input_type == "sdf" or FLAGS.input_type == "npz":
         CNN_3d = model.CNN_3d_rec7
     elif FLAGS.input_type == "voxel":
         CNN_3d = model.CNN_3d_rec15
 elif FLAGS.method == "undc":
-    if FLAGS.input_type == "sdf":
+    if FLAGS.input_type == "sdf" or FLAGS.input_type == "npz":
         CNN_3d = model.CNN_3d_rec7
     elif FLAGS.input_type == "voxel":
         CNN_3d = model.CNN_3d_rec15
@@ -101,7 +101,7 @@ elif FLAGS.method == "undc":
     elif FLAGS.input_type == "noisypc":
         CNN_3d = modelpc.local_pointnet_larger
 elif FLAGS.method == "ndcx":
-    if FLAGS.input_type == "sdf":
+    if FLAGS.input_type == "sdf" or FLAGS.input_type == "npz":
         CNN_3d = model.CNN_3d_rec7_resnet
     elif FLAGS.input_type == "voxel":
         CNN_3d = model.CNN_3d_rec15_resnet
@@ -112,7 +112,7 @@ pooling_radius = 2 #for pointcloud input
 KNN_num = modelpc.KNN_num
 
 if net_bool:
-    if FLAGS.input_type == "sdf" or FLAGS.input_type == "voxel" or FLAGS.input_type == "udf":
+    if FLAGS.input_type == "npz" or FLAGS.input_type == "sdf" or FLAGS.input_type == "voxel" or FLAGS.input_type == "udf":
         network_bool = CNN_3d(out_bool=True, out_float=False, is_undc=(FLAGS.method == "undc"))
     elif FLAGS.input_type == "pointcloud" or FLAGS.input_type == "noisypc":
         network_bool = CNN_3d(out_bool=True, out_float=False)
@@ -496,11 +496,17 @@ elif quick_testing:
 
     #load weights
     print('loading net...')
-    if net_bool and (FLAGS.method == "undc" or FLAGS.input_type != "sdf"):
-        network_bool.load_state_dict(torch.load(FLAGS.checkpoint_dir+"/weights_"+FLAGS.method+"_"+FLAGS.input_type+"_bool.pth"))
+    if net_bool and (FLAGS.method == "undc" or (FLAGS.input_type != "sdf" and FLAGS.input_type != "npz")):
+        if FLAGS.input_type == "npz":
+            network_bool.load_state_dict(torch.load(FLAGS.checkpoint_dir+"/weights_"+FLAGS.method+"_sdf_bool.pth"))
+        else:
+            network_bool.load_state_dict(torch.load(FLAGS.checkpoint_dir+"/weights_"+FLAGS.method+"_"+FLAGS.input_type+"_bool.pth"))
         print('network_bool weights loaded')
     if net_float:
-        network_float.load_state_dict(torch.load(FLAGS.checkpoint_dir+"/weights_"+FLAGS.method+"_"+FLAGS.input_type+"_float.pth"))
+        if FLAGS.input_type == "npz":
+            network_float.load_state_dict(torch.load(FLAGS.checkpoint_dir+"/weights_"+FLAGS.method+"_sdf_float.pth"))
+        else:
+            network_float.load_state_dict(torch.load(FLAGS.checkpoint_dir+"/weights_"+FLAGS.method+"_"+FLAGS.input_type+"_float.pth"))
         print('network_float weights loaded')
     print('loading net... complete')
 
@@ -511,7 +517,7 @@ elif quick_testing:
         network_float.eval()
 
 
-    if FLAGS.input_type == "sdf" or FLAGS.input_type == "voxel" or FLAGS.input_type == "udf":
+    if FLAGS.input_type == "sdf" or FLAGS.input_type == "voxel" or FLAGS.input_type == "udf" or FLAGS.input_type == "npz":
         #Create test dataset
         dataset_test = dataset.single_shape_grid(FLAGS.test_input, receptive_padding, FLAGS.input_type, is_undc=(FLAGS.method == "undc"))
         dataloader_test = torch.utils.data.DataLoader(dataset_test, batch_size=1, shuffle=False, num_workers=1)  #batch_size must be 1
@@ -533,7 +539,7 @@ elif quick_testing:
                 if net_bool:
 
                     if FLAGS.method == "undc":
-                        if FLAGS.input_type == "sdf" or FLAGS.input_type == "udf":
+                        if FLAGS.input_type == "npz" or FLAGS.input_type == "sdf" or FLAGS.input_type == "udf":
                             pred_output_bool = ( pred_output_bool[0] > 0.5 ).int()
                         if FLAGS.input_type == "voxel":
                             pred_output_bool = ( pred_output_bool[0]*gt_output_bool_mask[0] > 0.5 ).int()
@@ -550,7 +556,7 @@ elif quick_testing:
                             gt_output_bool_mask_numpy = np.transpose(gt_output_bool_mask_[0].detach().cpu().numpy(), [1,2,3,0]).astype(np.int32)
                             gt_input_numpy = np.expand_dims(gt_input_numpy.astype(np.int32), axis=3)
                             pred_output_bool_numpy = pred_output_bool_numpy*gt_output_bool_mask_numpy + gt_input_numpy*(1-gt_output_bool_mask_numpy)
-                        if FLAGS.input_type == "sdf":
+                        if FLAGS.input_type == "npz" or FLAGS.input_type == "sdf":
                             pred_output_bool_numpy = np.expand_dims((gt_input_numpy<0).astype(np.int32), axis=3)
 
                 else:

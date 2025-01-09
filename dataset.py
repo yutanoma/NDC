@@ -5,7 +5,7 @@ import h5py
 
 import torch
 
-from utils import read_data,read_and_augment_data_ndc,read_and_augment_data_undc,read_data_input_only, read_sdf_file_as_3d_array,read_binvox_file_as_3d_array
+from utils import read_data,read_and_augment_data_ndc,read_and_augment_data_undc,read_data_input_only, read_sdf_file_as_3d_array,read_binvox_file_as_3d_array, read_npz_file_as_3d_array
 
 class ABC_grid_hdf5(torch.utils.data.Dataset):
     def __init__(self, data_dir, output_grid_size, receptive_padding, input_type, train, out_bool, out_float, is_undc, input_only=False):
@@ -267,7 +267,7 @@ class single_shape_grid(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
 
-        if self.input_type=="sdf" or self.input_type=="udf":
+        if self.input_type=="sdf" or self.input_type=="udf" or self.input_type=="npz":
             if self.data_dir.split(".")[-1]=="sdf":
                 LOD_input = read_sdf_file_as_3d_array(self.data_dir)
             elif self.data_dir.split(".")[-1]=="hdf5":
@@ -275,6 +275,8 @@ class single_shape_grid(torch.utils.data.Dataset):
                 hdf5_file = h5py.File(self.data_dir, 'r')
                 LOD_input = hdf5_file[str(grid_size)+"_sdf"][:]
                 hdf5_file.close()
+            elif self.data_dir.split(".")[-1]=="npz":
+                LOD_input = read_npz_file_as_3d_array(self.data_dir)
             else:
                 print("ERROR: invalid input type - only support sdf or hdf5")
                 exit(-1)
@@ -315,7 +317,7 @@ class single_shape_grid(torch.utils.data.Dataset):
         #prepare mask
         if self.is_undc:
             gt_output_bool_mask_ = np.zeros([3,grid_size+1,grid_size+1,grid_size+1], np.float32)
-            if self.input_type=="sdf" or self.input_type=="udf":
+            if self.input_type=="sdf" or self.input_type=="udf" or self.input_type=="npz":
                 tmp_mask = ( (gt_input_>-1) & (gt_input_<1) )
                 gt_output_bool_mask_[0,:-1,:,:] = tmp_mask[:-1,:,:] & tmp_mask[1:,:,:]
                 gt_output_bool_mask_[1,:,:-1,:] = tmp_mask[:,:-1,:] & tmp_mask[:,1:,:]
@@ -348,7 +350,7 @@ class single_shape_grid(torch.utils.data.Dataset):
         #receptive field padding
         padded = grid_size+1+self.receptive_padding*2
         
-        if self.input_type=="sdf" or self.input_type=="udf":
+        if self.input_type=="sdf" or self.input_type=="udf" or self.input_type=="npz":
             if gt_input_[0,0,0,0]>0:
                 gt_input = np.full([1,padded,padded,padded],10,np.float32)
             else:
